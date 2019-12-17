@@ -1,0 +1,106 @@
+setwd("C:/Users/karen/Documents/UNIVERSITY/ECONOMIA/III semester/UBR")
+getwd()
+install.packages("Hmisc")
+install.packages("pROC")
+install.packages("ROCR")
+install.packages("plotROC")
+install.packages("caret")
+library(Hmisc)
+library(zoo)
+library(InformationValue)
+library(stats)
+library(ggplot2)
+library(ROCR)
+library(plotROC)
+library(pROC)
+library(caret)
+library(dplyr)
+options(encoding="UTF-8")
+options(encoding="KOI8-R")
+Sys.setlocale("LC_CTYPE", "russian")
+
+Data_In = read.csv2("Data_In.csv")
+rm <- c("Расчетный.счет","Срок","Кредитная.история","Цель","Сумма.кредита","Накопления","Стаж.работы","взноса.от.дохода","Семейное.положение","Поручители","Прописка","Наличие.имущества","Возраст","Наличие.других.кредитов","Статус.жилья","Другие.кредиты.в.этом.банке","Работа","Иждивенцы","Номер.телефона","Работа.за.границей","Индикатор")
+colnames(Data_In) <- rm
+str(Data_In)
+dplyr::glimpse(Data_In)
+
+
+#Escalado
+Data_In$Срок = scale(Data_In$Срок)
+Data_In$Сумма.кредита = scale(Data_In$Сумма.кредита)
+Data_In$взноса.от.дохода = scale(Data_In$взноса.от.дохода)
+Data_In$Прописка = scale(Data_In$Прописка)
+Data_In$Возраст = scale(Data_In$Возраст)
+head(Data_In)
+
+Data_1 = select(Data_In, -"Работа", -"Прописка", -"Номер.телефона", -"Стаж.работы", -"Иждивенцы", -"Другие.кредиты.в.этом.банке", -"Наличие.имущества")
+
+##seleccion de modelo
+Model_basic <-glm(data = Data_In, Индикатор ~.,  family="binomial")
+Model_1 <-lm(data = Data_In, Индикатор ~.)
+rm(Model_1)
+summary(Model_basic)
+Model_2 = lm(data = Data_1, Индикатор ~.)
+summary(Model_2)
+
+Model_2 = glm(data = Data_1, Индикатор ~.,  family="binomial")
+summary(Model_2)
+plot(Data_1)
+hist(Data_In$Сумма.кредита, freq = FALSE)
+hist(Data_1$Срок, freq = FALSE)
+hist(Data_1$взноса.от.дохода, freq = F)
+hist(Data$взноса.от.дохода, freq = F)
+
+#division of data set
+library(caret)
+In_train  <- caret::createDataPartition(Data_1$Индикатор, p=0.7, list = F)
+#обучающая выборка
+Data_train <- Data_1[In_train,]
+#тестовая выборка
+Data_test <- Data_1[-In_train,]
+
+##modelo con train
+Model_3 = glm(data = Data_train, Индикатор ~.,  family="binomial")
+summary(Model_3)
+
+#modelo con test
+fitLog = predict(Model_3,type="response", newdata=Data_test)
+table(round(fitLog), Data_test$Индикатор)
+pred = prediction( fitLog, Data_test$Индикатор)
+
+##ROC
+par(pty = "s")
+roc(Data_test$Индикатор, fitLog)
+roc(Data_test$Индикатор, fitLog,  plot=TRUE, legacy.axes=TRUE, percent=TRUE,
+    xlab="False Positive Percentage", ylab="True Postive Percentage", col="#377eb8", lwd=4, print.auc =T, auc.polygon = T)
+#Data: fitLog in 204 controls (Data_test$Индикатор 0) < 96 cases (Data_test$Индикатор 1).
+#Area under the curve: 78.98%
+
+
+##regression tree 
+library(rpart)
+ArbreModel <- rpart(data = Data_train, Индикатор ~., method = "anova")
+library(rpart.plot)
+rpart.plot(ArbreModel,box.palette="RdBu", shadow.col="gray", nn=TRUE)
+fitArbre <- predict(ArbreModel,  newdata=Data_test)
+table(round(fitArbre), Data_test$Индикатор)
+pred = prediction( fitArbre, Data_test$Индикатор)
+par(pty = "s")
+roc(Data_test$Индикатор, fitArbre)
+roc(Data_test$Индикатор, fitArbre,  plot=TRUE, legacy.axes=TRUE, percent=TRUE, 
+    xlab="False Positive Percentage", ylab="True Postive Percentage", col="#377eb8", lwd=4, print.auc =T, auc.polygon = T)
+
+
+##Random forest
+library(randomForest)
+RF <- randomForest(data = Data_train, Индикатор ~., ntree= 300, mtry = 6)
+fitForet <- predict(RF,   newdata=Data_test)
+table(round(fitForet), Data_test$Индикатор)
+plot(RF)
+pred = prediction( fitForet, Data_test$Индикатор)
+par(pty = "s")
+roc(Data_test$Индикатор, fitForet)
+roc(Data_test$Индикатор, fitForet,  plot=TRUE, legacy.axes=TRUE, percent=TRUE,
+    xlab="False Positive Percentage", ylab="True Postive Percentage", col="#377eb8", lwd=4, print.auc =T, auc.polygon = T)
+
